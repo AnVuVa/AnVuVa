@@ -1,11 +1,11 @@
 # ================== CONFIGURATION ==================
 import os
-#os.environ["OPENAI_API_KEY"] = "your-openai-key"
+#os.environ["OPENAI_API_KEY"] =
 # os.environ["MISTRAL_API_KEY"] =
 
-NEO4J_URI = "neo4j_url"
+NEO4J_URI = "neo4j+s://cc94cc74.databases.neo4j.io"
 NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "password"
+NEO4J_PASSWORD = "cD4ALjvgZ-uhvbQHs2dpYOCHVMQwws_TMcqENgnIKcw"
 
 from typing import List
 from tqdm import tqdm
@@ -48,7 +48,7 @@ def get_model(model_name: str = "mistral") -> ModelFactory:
             return ModelFactory.create(
                 model_platform=ModelPlatformType.OLLAMA,
                 model_type=model_name,
-                model_config_dict=OllamaConfig(temperature=0.2, max_tokens=2048).as_dict(),
+                model_config_dict=OllamaConfig(temperature=0.2, max_tokens=2000).as_dict(),
             )
 
 
@@ -263,26 +263,22 @@ def shrink_graph(gid: int = 1):
     n4j = Neo4jGraph(url=NEO4J_URI, username=NEO4J_USER, password=NEO4J_PASSWORD)
 
     # Query to find and merge nodes with the same 'id' (case-insensitive)
-    merge_query = f"""
-    MATCH (n {{gid: {gid}}})
-    WITH n.id AS original_id, LOWER(n.id) AS lower_id, COLLECT(n) AS nodes
-    WHERE SIZE(nodes) > 1
-    WITH nodes, nodes[0] AS target_node
-    UNWIND [node IN nodes WHERE node <> target_node] AS dup
-    SET target_node += properties(dup)
-    WITH dup, target_node
-    MATCH (dup)-[r]->(m)
-    CALL apoc.create.relationship(target_node, type(r), properties(r), m) YIELD rel AS r_new
-    DELETE r
-    WITH dup, target_node
-    MATCH (m)-[r]->(dup)
-    CALL apoc.create.relationship(m, type(r), properties(r), target_node) YIELD rel AS r_new
-    DELETE r
-    DELETE dup
-    RETURN COUNT(target_node) AS merged_nodes
-    """
-    result = n4j.query(query=merge_query)
-    print(f"Number of merged nodes: {result[0]['merged_nodes']}")
+    query = '''
+    MATCH (n) 
+    WHERE n.gid = $gid
+    WITH labels(n) AS nodeLabels, toLower(n.name) AS normalizedName, n
+    CALL {
+        WITH nodeLabels, normalizedName, n
+        MERGE (m {name: normalizedName})
+        SET m += n
+        RETURN m
+    }
+    WITH n, m
+    DETACH DELETE n
+    RETURN COUNT(n) AS merged_nodes
+    '''
+    # result = n4j.query(query=query, parameters={"gid": gid})
+    # print(f"Number of merged nodes: {result['merged_nodes'] if result else 0}")
 
 
 # ================== MAIN PIPELINE ==================
@@ -296,7 +292,7 @@ def process_document_to_neo4j(file_path: str, extract_model: str = "mistral", n_
         n_workers (int): Number of threads (1 = sequential)
     """
     text = load_document(file_path)
-    chunks = chunk_text(text)
+    chunks = chunk_text(text)[160:]
     print(f"Number of chunks: {len(chunks)}")
     
     extract_and_push_graph_elements(chunks, extract_model, n_workers, gid)
@@ -304,10 +300,10 @@ def process_document_to_neo4j(file_path: str, extract_model: str = "mistral", n_
 
 if __name__ == "__main__":
     # Example usage
-    file_path = r"E:\\Git_clone\\RAG\\qa_dataset\\data_clean\\textbooks\\en\\Anatomy_Gray.txt"
-    model_name = "mistral"
-    n_workers = 3
-    gid = 1
+    file_path = r"/content/AnVuVa/qa_dataset/data_clean/textbooks/en/First_Aid_Step1.txt"
+    model_name = "nuextract"
+    n_workers = 4
+    gid = None
     
     process_document_to_neo4j(file_path, model_name, n_workers, gid)
     # shrink_graph(gid)
@@ -346,4 +342,4 @@ def gretriever(query: str , extract_model:str = "nuextract"):
 
     kg_result = list(set(kg_result))
 
-    return kg_result[:50]
+    return kg_result[:100]
