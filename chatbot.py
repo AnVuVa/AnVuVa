@@ -2,6 +2,8 @@ from camel.models import ModelFactory
 from camel.types import ModelType, ModelPlatformType
 from camel.configs import ChatGPTConfig, MistralConfig, OllamaConfig
 
+import time
+
 class Chatbot:
     def __init__(self, model_name: str = "gpt"):
         """
@@ -53,9 +55,13 @@ class Chatbot:
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": user_input},
         ]
-        response = self.model.run(messages)
-        # print(response)
-        return response.choices[0].message.content
+        while True:  # Retry loop
+            try:
+                response = self.model.run(messages)
+                return response.choices[0].message.content
+            except Exception as e:
+                time.sleep(2)
+
 
 # Example usage
 if __name__ == "__main__":

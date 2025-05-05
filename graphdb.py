@@ -253,32 +253,33 @@ def extract_and_push_graph_elements(chunks: List[str], extract_model:str, n_work
 
 
 # ================== FUNCTION: Shrink Graph ==================
-def shrink_graph(gid: int = 1):
+def shrink_graph(gid = 1):
     """
-    Shrink the graph by merging nodes with the same 'id' property (case-insensitive).
-
-    Parameters:
-        gid (int): Graph ID to identify the graph in Neo4j.
+    Merge nodes with the same 'name' (case-insensitive), trimming whitespace and ignoring gid.
     """
     n4j = Neo4jGraph(url=NEO4J_URI, username=NEO4J_USER, password=NEO4J_PASSWORD)
 
-    # Query to find and merge nodes with the same 'id' (case-insensitive)
     query = '''
-    MATCH (n) 
-    WHERE n.gid = $gid
-    WITH labels(n) AS nodeLabels, toLower(n.name) AS normalizedName, n
-    CALL {
-        WITH nodeLabels, normalizedName, n
-        MERGE (m {name: normalizedName})
-        SET m += n
-        RETURN m
+    MATCH (n)
+    WHERE n.name IS NOT NULL
+    WITH trim(toLower(n.name)) AS normName, collect(n) AS nodes
+    WHERE size(nodes) > 1
+    CALL (nodes, normName) {
+        WITH nodes, normName
+        WITH nodes[0] AS target, nodes[1..] AS dupes
+        SET target.name = normName
+        WITH target, dupes
+        CALL apoc.refactor.mergeNodes([target] + dupes, {
+            properties: "combine",
+            mergeRels: true,
+            mergeLabels: true
+        }) YIELD node
+        RETURN node AS merged_node
     }
-    WITH n, m
-    DETACH DELETE n
-    RETURN COUNT(n) AS merged_nodes
+    RETURN COUNT(*) AS merged_nodes
     '''
-    # result = n4j.query(query=query, parameters={"gid": gid})
-    # print(f"Number of merged nodes: {result['merged_nodes'] if result else 0}")
+    result = n4j.query(query=query)
+    print(result)
 
 
 # ================== MAIN PIPELINE ==================
@@ -292,7 +293,7 @@ def process_document_to_neo4j(file_path: str, extract_model: str = "mistral", n_
         n_workers (int): Number of threads (1 = sequential)
     """
     text = load_document(file_path)
-    chunks = chunk_text(text)[160:]
+    chunks = chunk_text(text)
     print(f"Number of chunks: {len(chunks)}")
     
     extract_and_push_graph_elements(chunks, extract_model, n_workers, gid)
@@ -300,16 +301,16 @@ def process_document_to_neo4j(file_path: str, extract_model: str = "mistral", n_
 
 if __name__ == "__main__":
     # Example usage
-    file_path = r"/content/AnVuVa/qa_dataset/data_clean/textbooks/en/First_Aid_Step1.txt"
-    model_name = "nuextract"
-    n_workers = 4
-    gid = None
+    # file_path = r"/content/AnVuVa/qa_dataset/data_clean/textbooks/en/First_Aid_Step1.txt"
+    # model_name = "nuextract"
+    # n_workers = 4
+    gid = 1
     
-    process_document_to_neo4j(file_path, model_name, n_workers, gid)
+    # process_document_to_neo4j(file_path, model_name, n_workers, gid)
     # shrink_graph(gid)
 
 # ================== FUNCTION: Extract Entities ==================
-def gretriever(query: str , extract_model:str = "nuextract"):
+def gretriever(query: str , extract_model:str = "nuextract", k: int = 5) -> List[str]:
     """
     Extract entities from a query using the specified model.
 
@@ -330,10 +331,10 @@ def gretriever(query: str , extract_model:str = "nuextract"):
     for node in ans_element.nodes:
         n4j_query = f"""
     MATCH (n {{id: '{node.id}'}})-[r]->(m)
-    RETURN 'Node ' + n.id + ' (label: ' + labels(n)[0] + ') has relationship ' + type(r) + ' with Node ' + m.id + ' (label: ' + labels(m)[0] + ')' AS Description
+    RETURN n.id + type(r) + m.id AS Description
     UNION
     MATCH (n)<-[r]-(m {{id: '{node.id}'}})
-    RETURN 'Node ' + m.id + ' (label: ' + labels(m)[0] + ') has relationship ' + type(r) + ' with Node ' + n.id + ' (label: ' + labels(n)[0] + ')' AS Description
+    RETURN m.id + type(r) + n.id AS Description
     """
         result = n4j.query(query=n4j_query)
         kg_result.extend(result)
@@ -342,4 +343,4 @@ def gretriever(query: str , extract_model:str = "nuextract"):
 
     kg_result = list(set(kg_result))
 
-    return kg_result[:100]
+    return kg_result[:k]
