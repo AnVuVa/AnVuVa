@@ -3,9 +3,9 @@ import os
 #os.environ["OPENAI_API_KEY"] =
 # os.environ["MISTRAL_API_KEY"] =
 
-NEO4J_URI = "neo4j+s://cc94cc74.databases.neo4j.io"
+NEO4J_URI = "neo4j+s://e6d55956.databases.neo4j.io"
 NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "cD4ALjvgZ-uhvbQHs2dpYOCHVMQwws_TMcqENgnIKcw"
+NEO4J_PASSWORD = "Jp_MOHaF2tpH7mCiaMwdFEJ2YEALjECHt_GnSJ27Y8o"
 
 from typing import List
 from tqdm import tqdm
@@ -331,10 +331,10 @@ def gretriever(query: str , extract_model:str = "nuextract", k: int = 5) -> List
     for node in ans_element.nodes:
         n4j_query = f"""
     MATCH (n {{id: '{node.id}'}})-[r]->(m)
-    RETURN n.id + type(r) + m.id AS Description
+    RETURN n.id +" "+ type(r)+" " + m.id AS Description
     UNION
     MATCH (n)<-[r]-(m {{id: '{node.id}'}})
-    RETURN m.id + type(r) + n.id AS Description
+    RETURN m.id +" " + type(r) +" " + n.id AS Description
     """
         result = n4j.query(query=n4j_query)
         kg_result.extend(result)

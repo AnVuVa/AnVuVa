@@ -227,7 +227,7 @@ def create_retriever(faiss_index_path: str, k: int = 5):
     vectorstore = FAISS.load_local(faiss_index_path, embeddings, allow_dangerous_deserialization=True)
 
     # Create a retriever
-    retriever = vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": k})
+    retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": k})
     return retriever
 
 

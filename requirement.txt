@@ -1,0 +1,5 @@
+- langchain
+- langchain_community
+- langchain_unstructured
+- langchain_huggingface
+- camel_ai[all]==0.2.16

@@ -59,7 +59,7 @@ class Chatbot:
             try:
                 response = self.model.run(messages)
                 return response.choices[0].message.content
-            except Exception as e:
+            except Exception:
                 time.sleep(2)
 
 
